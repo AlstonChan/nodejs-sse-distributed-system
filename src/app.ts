@@ -7,6 +7,9 @@ import fastify from "fastify";
 // Internal module
 import env from "./lib/env";
 
+// Controllers
+import { getSse, handleSubmittedRequest } from "./controllers/sse.controller";
+
 // Types
 declare module "fastify" {
   export interface FastifyInstance {
@@ -62,6 +65,48 @@ export default async function build(opts = {}) {
     handler: (request, reply) => {
       reply.view("index");
     },
+  });
+  server.route({
+    method: "POST",
+    url: "/submit",
+    handler: handleSubmittedRequest,
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          data: {
+            type: "object",
+            properties: {
+              foo: { type: "string" },
+              clientId: { type: "string" },
+            },
+            required: ["foo", "clientId"],
+          },
+        },
+      },
+      response: {
+        200: {
+          type: "object",
+          properties: {
+            message: { status: "string" },
+          },
+        },
+      },
+    },
+  });
+  server.route({
+    method: "GET",
+    url: "/sse",
+    schema: {
+      querystring: {
+        type: "object",
+        properties: {
+          clientId: { type: "string" },
+        },
+        required: ["clientId"],
+      },
+    },
+    handler: getSse,
   });
 
   return server;
