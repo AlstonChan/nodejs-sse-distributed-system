@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.vscode
+logs
+.env
+.env.example
+eslint.config.mjs
+.eslintrc.json
+.prettierrc
+.prettierignore
+.gitignore

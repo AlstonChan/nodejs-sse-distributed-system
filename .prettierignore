@@ -1,0 +1,4 @@
+# Ignore all files except .ejs files
+# /**/*.js
+/**/*.json
+/**/*.css
