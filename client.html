@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSE with BullMQ Demo</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 1000px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        margin: 20px 0;
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 10px 20px;
+        cursor: pointer;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        transition: opacity 0.3s;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-primary {
+        background-color: #4caf50;
+        color: white;
+      }
+      .btn-danger {
+        background-color: #f44336;
+        color: white;
+      }
+      .btn-warning {
+        background-color: #ff9800;
+        color: white;
+      }
+      .btn-info {
+        background-color: #2196f3;
+        color: white;
+      }
+      #status {
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 5px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+      }
+      .status-item {
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+      }
+      .status-item.connected {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .status-item.processing {
+        background-color: #fff3cd;
+        color: #856404;
+      }
+      #messages {
+        border: 1px solid #ccc;
+        padding: 20px;
+        min-height: 400px;
+        max-height: 600px;
+        overflow-y: auto;
+        background-color: #f9f9f9;
+        border-radius: 5px;
+      }
+      .message {
+        padding: 12px;
+        margin: 10px 0;
+        background-color: white;
+        border-left: 4px solid #4caf50;
+        border-radius: 3px;
+        animation: slideIn 0.3s ease-out;
+      }
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateX(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      .message-header {
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 5px;
+      }
+      .message-body {
+        color: #666;
+        margin: 5px 0;
+      }
+      .timestamp {
+        color: #999;
+        font-size: 0.85em;
+        margin-top: 5px;
+      }
+      h2 {
+        margin-top: 30px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SSE with BullMQ Demo</h1>
+
+    <div id="status">
+      <div id="sse-status" class="status-item">SSE: Disconnected</div>
+      <div id="job-status" class="status-item">Jobs: Idle</div>
+      <div id="queue-stats" class="status-item">Queue: N/A</div>
+    </div>
+
+    <div class="controls">
+      <button id="connect" class="btn-primary">Connect SSE</button>
+      <button id="disconnect" class="btn-danger">Disconnect SSE</button>
+      <button id="start-jobs" class="btn-warning">Start Job Processing</button>
+      <button id="stop-jobs" class="btn-danger">Stop Job Processing</button>
+      <button id="refresh-stats" class="btn-info">Refresh Queue Stats</button>
+      <button id="clear" class="btn-info">Clear Messages</button>
+    </div>
+
+    <h2>Task Results:</h2>
+    <div id="messages"></div>
+
+    <script>
+      let eventSource = null;
+      let jobsRunning = false;
+      const messagesDiv = document.getElementById("messages");
+      const sseStatusDiv = document.getElementById("sse-status");
+      const jobStatusDiv = document.getElementById("job-status");
+      const queueStatsDiv = document.getElementById("queue-stats");
+
+      const connectBtn = document.getElementById("connect");
+      const disconnectBtn = document.getElementById("disconnect");
+      const startJobsBtn = document.getElementById("start-jobs");
+      const stopJobsBtn = document.getElementById("stop-jobs");
+      const refreshStatsBtn = document.getElementById("refresh-stats");
+      const clearBtn = document.getElementById("clear");
+
+      function updateSSEStatus(isConnected) {
+        if (isConnected) {
+          sseStatusDiv.textContent = "SSE: Connected";
+          sseStatusDiv.classList.add("connected");
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+        } else {
+          sseStatusDiv.textContent = "SSE: Disconnected";
+          sseStatusDiv.classList.remove("connected");
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+        }
+      }
+
+      function updateJobStatus(isRunning) {
+        jobsRunning = isRunning;
+        if (isRunning) {
+          jobStatusDiv.textContent = "Jobs: Processing...";
+          jobStatusDiv.classList.add("processing");
+          startJobsBtn.disabled = true;
+          stopJobsBtn.disabled = false;
+        } else {
+          jobStatusDiv.textContent = "Jobs: Idle";
+          jobStatusDiv.classList.remove("processing");
+          startJobsBtn.disabled = false;
+          stopJobsBtn.disabled = true;
+        }
+      }
+
+      function addMessage(data) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = "message";
+
+        if (data.message && data.message.includes("Connected to SSE")) {
+          messageDiv.style.borderLeftColor = "#2196F3";
+          messageDiv.innerHTML = `
+          <div class="message-header">System</div>
+          <div class="message-body">${data.message}</div>
+          <div class="timestamp">${new Date(data.timestamp).toLocaleString()}</div>
+        `;
+        } else {
+          messageDiv.innerHTML = `
+          <div class="message-header">Task ID: ${data.taskId}</div>
+          <div class="message-body">Status: ${data.status}</div>
+          <div class="message-body">${data.result}</div>
+          <div class="timestamp">${new Date(data.timestamp).toLocaleString()}</div>
+        `;
+        }
+
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      async function refreshQueueStats() {
+        try {
+          const response = await fetch("http://localhost:3000/queue-status");
+          const stats = await response.json();
+          queueStatsDiv.innerHTML = `
+          Queue Stats:<br>
+          Waiting: ${stats.waiting} | Active: ${stats.active}<br>
+          Completed: ${stats.completed} | Failed: ${stats.failed}
+        `;
+        } catch (error) {
+          console.error("Failed to fetch queue stats:", error);
+          queueStatsDiv.textContent = "Queue: Error fetching stats";
+        }
+      }
+
+      function connect() {
+        if (eventSource) return;
+
+        console.log("Attempting to connect to SSE...");
+        eventSource = new EventSource("http://localhost:3000/events");
+
+        eventSource.onopen = () => {
+          console.log("SSE Connection opened");
+          updateSSEStatus(true);
+        };
+
+        eventSource.onmessage = (event) => {
+          console.log("Message received:", event.data);
+          try {
+            const data = JSON.parse(event.data);
+            addMessage(data);
+            if (data.status === "completed") {
+              refreshQueueStats();
+            }
+          } catch (err) {
+            console.error("Error parsing message:", err);
+          }
+        };
+
+        eventSource.onerror = (error) => {
+          console.error("SSE error:", error);
+          console.log("EventSource readyState:", eventSource.readyState);
+          if (eventSource.readyState === EventSource.CLOSED) {
+            disconnect();
+            alert("SSE connection failed. Make sure the server is running on port 3000.");
+          }
+        };
+      }
+
+      function disconnect() {
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+          updateSSEStatus(false);
+          console.log("SSE Connection closed");
+        }
+      }
+
+      async function startJobs() {
+        try {
+          const response = await fetch("http://localhost:3000/start-jobs", {
+            method: "POST",
+          });
+          const data = await response.json();
+          console.log("Jobs started:", data);
+          updateJobStatus(true);
+          refreshQueueStats();
+        } catch (error) {
+          console.error("Failed to start jobs:", error);
+          alert("Failed to start jobs. Make sure the server is running.");
+        }
+      }
+
+      async function stopJobs() {
+        try {
+          const response = await fetch("http://localhost:3000/stop-jobs", {
+            method: "POST",
+          });
+          const data = await response.json();
+          console.log("Jobs stopped:", data);
+          updateJobStatus(false);
+          refreshQueueStats();
+        } catch (error) {
+          console.error("Failed to stop jobs:", error);
+        }
+      }
+
+      connectBtn.addEventListener("click", connect);
+      disconnectBtn.addEventListener("click", disconnect);
+      startJobsBtn.addEventListener("click", startJobs);
+      stopJobsBtn.addEventListener("click", stopJobs);
+      refreshStatsBtn.addEventListener("click", refreshQueueStats);
+      clearBtn.addEventListener("click", () => {
+        messagesDiv.innerHTML = "";
+      });
+
+      // Initialize UI
+      updateSSEStatus(false);
+      updateJobStatus(false);
+
+      // Auto-refresh queue stats every 5 seconds if connected
+      setInterval(() => {
+        if (eventSource || jobsRunning) {
+          refreshQueueStats();
+        }
+      }, 5000);
+    </script>
+  </body>
+</html>

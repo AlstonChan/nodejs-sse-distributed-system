@@ -1,0 +1,41 @@
+{
+  "name": "nodejs-sse-distributed-system",
+  "version": "1.0.0",
+  "description": "Implements Server Sent Events (SSE) in a distributed system using Node.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon single-server.js",
+    "dev:simple": "nodemon simple.js",
+    "dev:multi": "nodemon multi-server.js",
+    "dev:worker": "nodemon multi-server-worker.js",
+    "dev:scaled": "concurrently \"npm run dev:multi\" \"npm run dev:worker\"",
+    "dev:scaled:multi-worker": "concurrently \"npm run dev:multi\" \"npm run dev:worker\" \"npm run dev:worker\""
+  },
+  "dependencies": {
+    "@fastify/redis": "^7.1.0",
+    "bullmq": "^5.8.3",
+    "fastify": "^5.6.1",
+    "ioredis": "^5.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.4"
+  },
+  "author": {
+    "name": "Chan Alston",
+    "url": "https://www.chanalston.com",
+    "email": "hello@chanalston.com"
+  },
+  "repository": {
+    "url": "https://github.com/AlstonChan/nodejs-sse-distributed-system",
+    "type": "git"
+  },
+  "keywords": [
+    "fastify",
+    "nodejs",
+    "sse",
+    "distributed-system"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,6 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: bullmq_redis_sse
+    ports:
+      - "6379:6379"

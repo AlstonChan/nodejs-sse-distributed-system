@@ -1,0 +1,7 @@
+node_modules
+*.env
+logs/
+exports/
+dist/
+public/build
+.vscode
